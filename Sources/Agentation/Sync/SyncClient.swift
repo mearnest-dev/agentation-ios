@@ -4,6 +4,7 @@ import Foundation
 ///
 /// Uses the same routes as the web toolbar:
 /// `POST /sessions`, `POST /sessions/:id/annotations`, `PATCH|DELETE /annotations/:id`, `GET /sessions/:id`.
+@MainActor
 final class SyncClient {
     struct HTTPError: Error, CustomStringConvertible {
         let status: Int
@@ -16,6 +17,8 @@ final class SyncClient {
     private let defaults: UserDefaults
     private let defaultsKey: String
     private(set) var sessionId: String?
+    /// Shared by callers that need a session while one is being created, so only one is made.
+    private var pendingSession: Task<String, Error>?
 
     init?(endpoint: String, sessionURL: String, urlSession: URLSession = .shared, defaults: UserDefaults = .standard) {
         var trimmed = endpoint.trimmingCharacters(in: .whitespaces)
@@ -32,13 +35,25 @@ final class SyncClient {
     /// Returns the cached session ID or creates a new session.
     func ensureSession() async throws -> String {
         if let sessionId { return sessionId }
+        if let pendingSession { return try await pendingSession.value }
         struct Body: Encodable { let url: String }
         struct Session: Decodable { let id: String }
-        let data = try await send("POST", "sessions", json: try JSONEncoder().encode(Body(url: sessionURL)), expect: [200, 201])
-        let id = try JSONDecoder().decode(Session.self, from: data).id
-        sessionId = id
-        defaults.set(id, forKey: defaultsKey)
-        return id
+        let body = try JSONEncoder().encode(Body(url: sessionURL))
+        let task = Task { () throws -> String in
+            let data = try await send("POST", "sessions", json: body, expect: [200, 201])
+            return try JSONDecoder().decode(Session.self, from: data).id
+        }
+        pendingSession = task
+        do {
+            let id = try await task.value
+            pendingSession = nil
+            sessionId = id
+            defaults.set(id, forKey: defaultsKey)
+            return id
+        } catch {
+            pendingSession = nil
+            throw error
+        }
     }
 
     /// Sends a new annotation and returns the server's ID for it.
@@ -101,6 +116,7 @@ final class SyncClient {
 
     private func resetSession() {
         sessionId = nil
+        pendingSession = nil
         defaults.removeObject(forKey: defaultsKey)
     }
 

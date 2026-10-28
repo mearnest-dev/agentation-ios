@@ -410,6 +410,7 @@ final class OverlayViewController: UIViewController {
         if force || name != currentScreen {
             currentScreen = name
             rebuildMarkers()
+            UIView.animate(withDuration: 0.2) { self.layoutToolbar() }
         }
     }
 
@@ -441,8 +442,17 @@ final class OverlayViewController: UIViewController {
 
     // MARK: - Toolbar layout
 
+    /// Area the toolbar stays inside. Uses the app's own safe area when it is smaller,
+    /// so the toolbar sits above tab bars and toolbars instead of covering them.
     private var toolbarSafeArea: CGRect {
-        view.bounds.inset(by: view.safeAreaInsets).insetBy(dx: 12, dy: 8)
+        var safe = view.bounds.inset(by: view.safeAreaInsets)
+        if let window = appWindow(), let content = appTopViewController?.view, content.window === window {
+            let appSafe = appRectToOverlay(content.convert(content.safeAreaLayoutGuide.layoutFrame, to: nil), window)
+            let narrowed = safe.intersection(appSafe)
+            // Ignore odd results, e.g. a screen that is mid-transition.
+            if !narrowed.isNull, narrowed.height > safe.height * 0.5, narrowed.width > safe.width * 0.5 { safe = narrowed }
+        }
+        return safe.insetBy(dx: 12, dy: 8)
     }
 
     private func layoutToolbar() {

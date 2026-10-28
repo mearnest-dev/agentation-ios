@@ -305,7 +305,7 @@ agentation-ios/
 │   ├── Storage/                  // JSON persistence
 │   └── Sync/                     // agentation-mcp HTTP client
 ├── Tests/AgentationTests/
-└── Demo/                         // SwiftUI + UIKit demo app (XcodeGen)
+└── Demo/                         // SwiftUI + UIKit demo app and UI tests (XcodeGen)
 ```
 
 ## Demo
@@ -335,6 +335,16 @@ Or run them on a Simulator:
 ```bash
 xcodebuild test -scheme Agentation -destination 'platform=iOS Simulator,name=iPhone 16'
 ```
+
+The demo app has UI tests that drive the toolbar in the Simulator: inspect, annotate, area select, edit, delete, clear, copy, and persistence across relaunch. Start from a fresh install so no old annotations are left:
+
+```bash
+cd Demo && xcodegen
+xcrun simctl uninstall booted dev.mearnest.AgentationDemo
+xcodebuild test -project AgentationDemo.xcodeproj -scheme AgentationDemo -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+```
+
+`SyncFlowTests` also checks the round trip with agentation-mcp (create, edit, agent resolves, toolbar drops it). It is skipped unless `npx -y agentation-mcp server` is running.
 
 ## Credits
 

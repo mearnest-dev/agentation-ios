@@ -19,7 +19,13 @@ final class PassthroughWindow: UIWindow {
 }
 
 /// A container that never takes touches itself; only its subviews do.
-class PassthroughView: UIView {}
+/// Returning nil lets hit-testing continue to siblings underneath, such as the selection layer.
+class PassthroughView: UIView {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let hit = super.hitTest(point, with: event)
+        return hit === self ? nil : hit
+    }
+}
 
 class PaddedLabel: UILabel {
     var insets = UIEdgeInsets(top: 4, left: 8, bottom: 4, right: 8)

@@ -39,6 +39,7 @@ final class SyncPayloadTests: XCTestCase {
         XCTAssertEqual(json["isMultiSelect"] as? Bool, true)
     }
 
+    @MainActor
     func testRejectsInvalidEndpoint() {
         XCTAssertNil(SyncClient(endpoint: "localhost:4747", sessionURL: "ios-sim://app"))
         XCTAssertEqual(

@@ -17,19 +17,12 @@ enum ElementCapture {
     // MARK: - Element at a point
 
     static func element(at point: CGPoint, in window: UIWindow) -> CapturedElement {
-        let view = deepestView(at: point, in: window) ?? window
-        let viewFrame = view.convert(view.bounds, to: nil)
+        let resolved = resolve(at: point, in: window)
+        let view = resolved.view
+        var node = resolved.node
+        let nodeFrame = resolved.nodeFrame
         let markers = TagRegistry.markers(containing: point, in: window)
-
-        var node: NSObject?
-        var nodeFrame: CGRect?
-        if let host = hostingAncestor(of: view) {
-            let screenPoint = window.convert(point, to: window.screen.coordinateSpace)
-            node = accessibilityNode(at: screenPoint, in: host, depth: 0)
-            if let node {
-                nodeFrame = window.convert(node.accessibilityFrame, from: window.screen.coordinateSpace)
-            }
-        }
+        let viewFrame = view.convert(view.bounds, to: nil)
 
         let element: String
         let text: String?
@@ -39,7 +32,7 @@ enum ElementCapture {
         let viewClass: String?
         let style: String?
 
-        if let node, let nodeFrame, area(nodeFrame) > 0, area(nodeFrame) < area(viewFrame) * 0.98 {
+        if let node, let nodeFrame, isUsefulNode(nodeFrame, comparedTo: view) {
             element = elementName(forTraits: node.accessibilityTraits)
             label = node.accessibilityLabel.nonEmpty
             if let value = node.accessibilityValue.nonEmpty {
@@ -85,11 +78,47 @@ enum ElementCapture {
         )
     }
 
+    /// The view under `point`, plus the SwiftUI accessibility element there when the view is a hosting view.
+    private static func resolve(at point: CGPoint, in window: UIWindow) -> (view: UIView, node: NSObject?, nodeFrame: CGRect?) {
+        let front = deepestView(at: point, in: window) ?? window
+        guard let host = hostingAncestor(of: front) else { return (controlAncestor(of: front) ?? front, nil, nil) }
+        let screenPoint = window.convert(point, to: window.screen.coordinateSpace)
+
+        func node(in root: UIView) -> (NSObject, CGRect)? {
+            guard let node = accessibilityNode(at: screenPoint, in: root, depth: 0) else { return nil }
+            return (node, window.convert(node.accessibilityFrame, from: window.screen.coordinateSpace))
+        }
+
+        // An empty hosting view can sit on top of the content: on iOS 26 the floating tab bar
+        // container covers the whole screen. Look through it to the content underneath.
+        var target = host
+        if front === host, accessibilityChildren(of: host).isEmpty,
+           let under = hostingViews(at: point, in: window).first(where: {
+               !$0.isDescendant(of: host) && !host.isDescendant(of: $0) && !accessibilityChildren(of: $0).isEmpty
+           }) {
+            target = under
+        }
+        let view = target === host ? front : (deepestView(at: point, in: target) ?? target)
+        let found = node(in: target)
+        return (controlAncestor(of: view) ?? view, found?.0, found?.1)
+    }
+
+    /// Taps on a control's internals (a button's label, a text field's placeholder) report the control.
+    private static func controlAncestor(of view: UIView) -> UIView? {
+        var current: UIView? = view
+        for _ in 0..<4 {
+            guard let v = current else { return nil }
+            if v is UIControl { return v }
+            current = v.superview
+        }
+        return nil
+    }
+
     // MARK: - Area
 
     static func area(_ rect: CGRect, in window: UIWindow) -> CapturedElement {
         let center = CGPoint(x: rect.midX, y: rect.midY)
-        let container = deepestView(at: center, in: window) ?? window
+        let container = resolve(at: center, in: window).view
         let enclosing = TagRegistry.markers(enclosing: rect, in: window)
         let inside = unique(TagRegistry.markers(inside: rect, in: window).compactMap(\.markerTag))
 
@@ -146,6 +175,25 @@ enum ElementCapture {
         if isHostingView(view) || view.layer.contents != nil { return true }
         if let background = view.backgroundColor, background.cgColor.alpha > 0.05 { return true }
         return false
+    }
+
+    /// Hosting views under `point`, front-most first.
+    static func hostingViews(at point: CGPoint, in root: UIView) -> [UIView] {
+        var result: [UIView] = []
+        func visit(_ view: UIView) {
+            guard isEligible(view), view.bounds.contains(view.convert(point, from: nil)) else { return }
+            for subview in view.subviews.reversed() { visit(subview) }
+            if isHostingView(view) { result.append(view) }
+        }
+        visit(root)
+        return result
+    }
+
+    /// An accessibility element is worth reporting when it is smaller than the view that hosts it.
+    private static func isUsefulNode(_ nodeFrame: CGRect?, comparedTo view: UIView) -> Bool {
+        guard let nodeFrame else { return false }
+        let viewArea = area(view.convert(view.bounds, to: nil))
+        return area(nodeFrame) > 0 && area(nodeFrame) < viewArea * 0.98
     }
 
     static func isHostingView(_ view: UIView) -> Bool {
@@ -244,8 +292,15 @@ enum ElementCapture {
             return elements.compactMap { $0 as? NSObject }
         }
         let count = object.accessibilityElementCount()
-        guard count != NSNotFound, count > 0, count < 2000 else { return [] }
-        return (0..<count).compactMap { object.accessibilityElement(at: $0) as? NSObject }
+        if count != NSNotFound, count > 0, count < 2000 {
+            return (0..<count).compactMap { object.accessibilityElement(at: $0) as? NSObject }
+        }
+        // Plain container views (e.g. SwiftUI's HostingScrollView on iOS 26) expose their
+        // accessibility elements through subviews, the way UIKit's default traversal does.
+        if let view = object as? UIView, !view.isAccessibilityElement {
+            return view.subviews.filter { isEligible($0) && !$0.accessibilityElementsHidden }
+        }
+        return []
     }
 
     /// Smallest accessibility element under `screenPoint`.

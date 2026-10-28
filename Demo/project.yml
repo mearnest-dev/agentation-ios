@@ -36,3 +36,24 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "1,2"
+  AgentationDemoUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - AgentationDemoUITests
+    dependencies:
+      - target: AgentationDemo
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.mearnest.AgentationDemoUITests
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: "5.9"
+        TEST_TARGET_NAME: AgentationDemo
+schemes:
+  AgentationDemo:
+    build:
+      targets:
+        AgentationDemo: all
+    test:
+      targets:
+        - AgentationDemoUITests
