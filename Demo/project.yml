@@ -1,0 +1,38 @@
+# Generate the Xcode project with XcodeGen:
+#   brew install xcodegen
+#   cd Demo && xcodegen
+#   open AgentationDemo.xcodeproj
+name: AgentationDemo
+options:
+  bundleIdPrefix: dev.mearnest
+  deploymentTarget:
+    iOS: "16.0"
+packages:
+  Agentation:
+    path: ..
+targets:
+  AgentationDemo:
+    type: application
+    platform: iOS
+    sources:
+      - AgentationDemo
+    dependencies:
+      - package: Agentation
+    info:
+      path: AgentationDemo/Info.plist
+      properties:
+        CFBundleDisplayName: Agentation Demo
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.mearnest.AgentationDemo
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "1,2"
