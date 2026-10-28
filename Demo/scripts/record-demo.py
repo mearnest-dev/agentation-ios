@@ -61,6 +61,7 @@ finally:
     recorder.wait()
     subprocess.run(["xcrun", "simctl", "status_bar", udid, "clear"])
 
+json.dump({"t": record_start}, open(os.path.join(WORK, "record_start.json"), "w"))
 events = json.load(open(events_path))
 for e in events:
     e["t"] -= record_start      # seconds into the raw recording
