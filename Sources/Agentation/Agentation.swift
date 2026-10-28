@@ -109,6 +109,7 @@ public enum Agentation {
         window?.isHidden = true
         window = nil
         controller = nil
+        AccessibilityActivator.restore()
     }
 
     /// Opens the toolbar.
@@ -157,6 +158,7 @@ public enum Agentation {
         window = overlay
         controller = root
         ShakeDetector.install()
+        AccessibilityActivator.enable()
     }
 }
 #endif
